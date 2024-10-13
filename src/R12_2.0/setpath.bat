@@ -1,0 +1,1 @@
+set path=c:\j2sdk1.4.0_03\bin

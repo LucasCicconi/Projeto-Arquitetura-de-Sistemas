@@ -1,0 +1,63 @@
+Para Adicionar Instrução:
+
+---Adicionar no Simulador
+     -adicionar na classe ARQUITETURA no método carregaArqSim() a
+      inclusão da instrução.Ex:
+
+          arqSim.inclui("JN","Op1","Op2","Op3","Rs1");
+
+     -adicionar na classe EXECUÇÃO no método executa() o seguinte:
+
+          else if(inst.equalsIgnoreCase("JN"))
+             jn();
+
+     -adicionar na classe EXECUÇÃO o método que implementa a instrução.
+      Ex:
+	   public void jn()
+	   {
+           }
+      Obs:
+      	Para a instrução: arqSim.inclui("JN","Op1","Op2","Op3","Rs1");
+      		Codigo1 -> contém Op1
+	      	Codigo2 -> contém Op2
+	      	Codigo3 -> contém Op3
+	     	Codigo4 -> contém Rs1
+      	Para a instrução: arqSim.inclui("ADD","Op1","Rs1","Rs2","Rs3");
+      		Codigo1 -> contém Op1
+	      	Codigo2 -> contém Rs1
+	      	Codigo3 -> contém Rs2
+	     	Codigo4 -> contém Rs3
+
+---Adicionar no Configurador
+     -adicionar na classe ARQSIM no método carrega() a inclusão da 
+      instrução.Ex:
+ 
+	inclui("JN",1,0,0,"OP1","OP2","OP3","RS1","Op","JN Rs1    {if (N=1) then PC <- Rs1}");	
+
+      Onde os parâmentros são:
+       - Nome da Instrução do simulador
+       - Número de registradores utilizados pela instrução
+       - Número de constantes utilizadas pela instrução	
+       - Número de labels utilizados pela instrução
+       - Byte Code 1 (no exemplo Opcode1)
+       - Byte Code 2 (no exemplo Opcode2)
+       - Byte Code 3 (no exemplo Rsource1)
+       - Byte Code 3 (no exemplo livre)
+       - Flag dependente ("Op" para opcional ou "Ob" para obrigatório)
+       - Help da instrução.
+
+IMPORTANTE
+---Adicionar no Montador
+       - Se a instrução que está sendo incluída for do tipo:
+       LDL,LDH ou JMPD -> onde apenas parte da constante ou label deve
+                          ser carregada, deve se alterar no montador o
+                          seguinte:
+ 
+       No arquivo Subst.c existe procedimento substituir_label e dentro
+       dele: if (tipo == PSEUDO_LABEL). 
+       Neste if é que deve ser incluída a instrução. 
+
+
+
+		
+
