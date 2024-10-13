@@ -8,6 +8,8 @@ Adicionar uma unidade externa (co-processador) de processamento matricial (MPU) 
 ## Processador R8
 [Processador simples e didático desenvolvido na PUC-RS](https://www.inf.pucrs.br/~calazans/research/Projects/R8/R8_Processor_Core.html )
 
+![image](https://github.com/user-attachments/assets/4bbce33b-68e1-4377-bc09-9a6cdc1c1792)
+
 ### Recursos disponíveis:
 * Documentação em PDF
 * Descrição em VHDL
