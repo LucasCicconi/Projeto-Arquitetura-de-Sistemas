@@ -1,0 +1,11 @@
+[Version]
+Version=5.2
+[Designs]
+R8=R8.adf
+[Settings]
+Active=R8
+[Browser]
+sort=type
+mode=none
+[Expand]
+r8=1

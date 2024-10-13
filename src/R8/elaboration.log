@@ -1,0 +1,25 @@
+elbread.dll ver. 1.0.5.236 Fri May 02 17:34:58 2003
+
+
+-----------------------------------------
+Entity        | Architecture    | Library
+-----------------------------------------
+r8_tb         | tb_architecture | R8
+processor     | processor       | r8
+memram        | a1              | r8
+datapath      | datapath        | r8
+control_unit  | control_unit    | r8
+reg_bank      | reg_bank        | r8
+register16    | register16      | r8
+-----------------------------------------
+
+-----------------------------
+Package             | Library
+-----------------------------
+standard            | std
+std_logic_1164      | ieee
+textio              | std
+std_logic_arith     | ieee
+std_logic_unsigned  | ieee
+r8                  | R8
+-----------------------------

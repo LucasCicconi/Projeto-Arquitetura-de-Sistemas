@@ -1,0 +1,15 @@
+803
+~E 1 "./src/r8.vhd" 501 processor
+~A 1 "./src/r8.vhd" 509 processor
+~E 1 "./src/r8.vhd" 170 datapath
+~A 1 "./src/r8.vhd" 179 datapath
+~E 1 "./src/r8.vhd" 303 control_unit
+~A 1 "./src/r8.vhd" 310 control_unit
+~E 1 "./src/r8_tb.vhd" 22 memram
+~A 1 "./src/r8_tb.vhd" 28 a1
+~E 1 "./src/r8_tb.vhd" 59 r8_tb
+~A 1 "./src/r8_tb.vhd" 62 tb_architecture
+~E 1 "./src/r8.vhd" 133 reg_bank
+~A 1 "./src/r8.vhd" 139 reg_bank
+~E 1 "./src/r8.vhd" 107 register16
+~A 1 "./src/r8.vhd" 113 register16

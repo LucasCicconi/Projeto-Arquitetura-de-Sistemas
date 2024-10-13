@@ -1,0 +1,48 @@
+[Project]
+Current Flow=Multivendor
+VCS=0
+version=1
+Current Config=compile
+
+[Configurations]
+compile=R8
+
+[Settings]
+LANGUAGE=VHDL
+FLOW_TYPE=HDL
+FAMILY=
+SYNTH_TOOL=<none>
+IMPL_TOOL=<none>
+FLOWTOOLS=ONLY_IMPL
+
+[$LibMap$]
+Active_lib=
+xilinxun=
+R8=.
+
+[Library]
+R8=.\R8.LIB
+
+[IMPLEMENTATION]
+UCF=
+
+[HierarchyViewer]
+HierarchyInformation=r8_tb|tb_architecture|0 
+ShowHide=ShowTopLevel
+Selected=
+SortInfo=u
+
+[Files]
+/r8.vhd=-1
+/r8_tb.vhd=-1
+/vectaddr8.txt=-1
+/vectaddR8.asm=-1
+/vectadd_sim1.awf=-1
+
+[Files.Data]
+.\src\r8.vhd=VHDL Source Code
+.\src\r8_tb.vhd=VHDL Source Code
+.\src\vectaddr8.txt=Text File
+.\src\vectaddR8.asm=External File
+.\src\vectadd_sim1.awf=Waveform File
+
