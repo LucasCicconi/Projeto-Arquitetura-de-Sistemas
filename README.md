@@ -92,3 +92,7 @@ end MPU;
 [Lucas Cicconi](https://github.com/LucasCicconi)
 
 [Murilo Croce](https://github.com/KingMars01)
+
+[José Martins](https://github.com/Joueph)
+
+[André Pádua](https://github.com/dede2002)
