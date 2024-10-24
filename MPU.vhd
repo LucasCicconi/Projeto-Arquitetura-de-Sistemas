@@ -144,4 +144,13 @@ begin
             end case;
         end if;
     end process;
+    
+        process(clk)  -- Se houver um clock no sistema
+    begin
+        if rising_edge(clk) then
+            if intr = '1' then
+                intr <= '0';  -- Limpar a interrupção após um ciclo de clock
+            end if;
+        end if;
+    end process;
 end Behavioral;
