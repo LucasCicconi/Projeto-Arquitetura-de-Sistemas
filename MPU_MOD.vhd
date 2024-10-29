@@ -18,17 +18,19 @@ entity MPU is
     --output enable == REad
     end entity MPU;
 
-    architecture reg of MPU is
     -- signal A 	: std_logic_vector(255 downto 0);
     -- signal B 	: std_logic_vector(255 downto 0);
     -- signal C 	: std_logic_vector(255 downto 0);
-    signal MATRIX :std_logic_vector(1023 downto 0);
-    --1023 -> 768   : A
-    --767 -> 512    : B
-    --511 -> 256    : C
-    --255 -> 0      : CONTROLE
-    signal AUX  : std_logic_vector(255 downto 0);
-    signal com  : std_logic_vector(255 downto 0);
+    architecture reg of MPU is
+        signal MATRIX : std_logic_vector(1023 downto 0);
+        signal AUX : std_logic_vector(255 downto 0);
+        signal MAC_RESULT : std_logic_vector(255 downto 0);  -- Resultado temporário para MAC
+        signal com : std_logic_vector(255 downto 0);
+        --1023 -> 768   : A
+        --767 -> 512    : B
+        --511 -> 256    : C
+        --255 -> 0      : CONTROLE
+    
 
 
     --soma otimizado
@@ -93,21 +95,6 @@ entity MPU is
         C(255 - i*16 downto 240 - i*16) <= temp_sums(i)(31 downto 16);
     end loop;
     end MUL;
-
-    procedure MAC  (
-                signal A  : in std_logic_vector(255 downto 0);
-                signal B  : in std_logic_vector(255 downto 0);
-                signal C  : inout std_logic_vector(255 downto 0)
-               ) is
-    variable AUX : std_logic_vector(255 downto 0);
-    begin
-
-        MUL(A, B, AUX);
-       
-        SOMA(C, AUX, C);
-
-    end MAC;
-
 
     procedure ID   (
                     signal MAT 	:   out  std_logic_vector(255 downto 0);
@@ -196,8 +183,9 @@ entity MPU is
                     SUB(MATRIX(1023 downto 768), MATRIX(767 downto 512), MATRIX(511 downto 256));
                 when "0000000000000101"=>                               --Multiplicação C = A X B
                     MUL(MATRIX(1023 downto 768), MATRIX(767 downto 512), MATRIX(511 downto 256));
-                when "0000000000000111" =>                              -- MAC: C = C + A x B
-                    MAC(MATRIX(1023 downto 768), MATRIX(767 downto 512), MATRIX(511 downto 256));
+                    when "0000000000000111" =>  -- MAC: C = C + A x B
+                    MUL(MATRIX(1023 downto 768), MATRIX(767 downto 512), AUX);
+                    SOMA(MATRIX(511 downto 256), AUX, MAC_RESULT);                   
                 when "0000000000001000"=>                              --Identidade A, B e C igual a data respectivamente
                     ID(MATRIX(1023 downto 768), data);                                         
                 when "0000000000001001"=>
