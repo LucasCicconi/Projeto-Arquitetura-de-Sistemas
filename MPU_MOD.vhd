@@ -172,9 +172,10 @@ entity MPU is
                     when "0000000000000101" => -- Multiplicação
                         MUL(MATRIX(1023 downto 768), MATRIX(767 downto 512), MATRIX(511 downto 256));
                         report "Multiplicação executada: C = A * B" severity note;
-                    when "0000000000000111" => -- MAC
-                        MAC(MATRIX(1023 downto 768), MATRIX(767 downto 512), MATRIX(511 downto 256));
-                        report "MAC executado: C = C + A * B" severity note;
+                        when "0000000000000111" => -- C = C + A * B                      
+                        MUL(MATRIX(1023 downto 768), MATRIX(767 downto 512), AUX);                      
+                        SOMA(MATRIX(511 downto 256), AUX, MATRIX(511 downto 256));
+                        report "C atualizado com a soma: C = C + A * B" severity note;
                     when others =>
                         report "Operação não reconhecida" severity warning;
                 end case;
