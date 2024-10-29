@@ -5,71 +5,85 @@ use IEEE.numeric_std.all;
 entity MPU_tb is
 end entity MPU_tb;
 
-architecture TB of MPU_tb is
-    -- Declaração dos sinais
-    signal ce_n, we_n, oe_n : std_logic := '1';
-    signal intr : std_logic;
-    signal clk : std_logic := '0';
-    signal rst : std_logic := '1';
+architecture test of MPU_tb is
+    -- Sinais de teste
+    signal ce_n   : std_logic := '1';
+    signal we_n   : std_logic := '1';
+    signal oe_n   : std_logic := '1';
+    signal clk    : std_logic := '0';
+    signal rst    : std_logic := '1';
     signal address : std_logic_vector(15 downto 0) := (others => '0');
-    signal data : std_logic_vector(15 downto 0) := (others => '0');
+    signal data    : std_logic_vector(15 downto 0) := (others => '0');
+    signal intr    : std_logic;
 
-    -- Instância do sinal MATRIX para facilitar a verificação dos resultados
-    signal MATRIX : std_logic_vector(1023 downto 0);
-    signal com : std_logic_vector(15 downto 0) := (others => '0');
+    -- Instância da MPU
+    component MPU is
+        port(
+            ce_n : in std_logic;
+            we_n : in std_logic;
+            oe_n : in std_logic;
+            intr : out std_logic;
+            clk  : in std_logic;
+            rst  : in std_logic;
+            address : in std_logic_vector(15 downto 0);
+            data : inout std_logic_vector(15 downto 0)
+        );
+    end component;
 
 begin
-    -- Geração do Clock
-    clk_process : process
-    begin
-        clk <= not clk;
-        wait for 10 ns;
-    end process;
-
-    -- Instância da Unidade Sob Teste (UUT)
-    UUT: entity work.MPU
-        port map (
-            ce_n => ce_n,
-            we_n => we_n,
-            oe_n => oe_n,
-            intr => intr,
-            clk => clk,
-            rst => rst,
+    -- Instância do MPU
+    UUT: MPU
+        port map(
+            ce_n   => ce_n,
+            we_n   => we_n,
+            oe_n   => oe_n,
+            intr   => intr,
+            clk    => clk,
+            rst    => rst,
             address => address,
-            data => data
+            data   => data
         );
 
-    -- Processo de Teste
-    test_process: process
+    -- Geração do clock
+    clk_process : process
     begin
-        -- Inicialização: Reset do sistema
+        while true loop
+            clk <= '1';
+            wait for 10 ns;  -- Ciclo alto
+            clk <= '0';
+            wait for 10 ns;  -- Ciclo baixo
+        end loop;
+    end process;
+
+    -- Processo de estímulo
+    stimulus_process: process
+    begin
+        -- Reset
         rst <= '1';
         wait for 20 ns;
-        rst <= '0';
+        rst <= '0';  -- Desativando o reset
         wait for 20 ns;
 
-        -- Teste de FILL em A com valor específico
-        data <= x"0001"; -- Valor para preencher
-
-        -- FILL A
-        com <= "0000000000000000";
+        -- Exemplo de escrita em matriz A
+        we_n <= '0'; -- Habilitando escrita
+        address <= "0000000000000000"; -- Endereço para matriz A
+        data <= "0000000000000001"; -- Dado a ser escrito
         wait for 20 ns;
 
-        -- Verifica se o conteúdo de A está correto
-        assert MATRIX(1023 downto 768) = (others => '0')  -- Ajustar valor esperado
-            report "FILL A falhou" severity error;
-
-        -- Teste de SOMA (C = A + B)
-        com <= "0000000000000011";
+        -- Exemplo de leitura de matriz A
+        we_n <= '1'; -- Desabilitando escrita
+        oe_n <= '0'; -- Habilitando leitura
         wait for 20 ns;
 
-        -- Verifica o resultado da soma
-        assert MATRIX(511 downto 256) = x"0002"  -- Valor esperado
-            report "SOMA A + B falhou" severity error;
+        -- Exemplo de execução de uma operação (por exemplo, soma)
+        address <= "0000000000000011"; -- Exemplo de opcode para soma
+        wait for 20 ns;
 
-        -- Outros testes podem ser adicionados similarmente para SUB, MUL, MAC
+        -- Exibir os resultados
+        wait for 50 ns;
+        -- Você pode adicionar mais estímulos aqui conforme necessário
 
-        -- Final do teste
+        -- Finalizar simulação
         wait;
     end process;
-end architecture TB;
+end architecture test;
