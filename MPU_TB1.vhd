@@ -2,10 +2,10 @@ library IEEE;
 use IEEE.std_logic_1164.all;
 use IEEE.numeric_std.all;
 
-entity MPU_TB is
-end entity MPU_TB;
+entity MPU_tb is
+end entity MPU_tb;
 
-architecture TB of MPU_TB is
+architecture TB of MPU_tb is
     -- Declaração dos sinais
     signal ce_n, we_n, oe_n : std_logic := '1';
     signal intr : std_logic;
