@@ -154,50 +154,33 @@ entity MPU is
     data <= (others => 'Z');
     
 	    -- Processamento da ULA baseado no opcode
-    process(MATRIX, AUX, oe_n, ce_n, we_n, clk, rst, data, address)
-    begin
-        if rising_edge(clk) then
-            case com(15 downto 0) is  --Se com na posição addressess for igual a:
-                when "1111111111111111"=>                              --fill A com data
-                    if we_n = '0' then 
-                        WRITE(address(5 downto 0), data, MATRIX);
-                    elsif oe_n = '0' then
-                        READ(address(5 downto 0), data, MATRIX);
-                    
-                    end if;
-                when "1000000000000000"=>
-
-                when "0100000000000000"=>
-                    --Passa pra data
-                when "0010000000000000"=>
-                    --Passa pra data
-                when "0000000000000000"=>                              --fill A com data
-                    FILL(MATRIX(1023 downto 768), data);
-                when "0000000000000001"=>                              --fill B com data
-                    FILL(MATRIX(767 downto 512), data);
-                when "0000000000000010"=>                              --fill C com data
-                    FILL(MATRIX(511 downto 256), data);
-                when "0000000000000011"=>                               --Soma A, B, Armazena em C
-                    SOMA(MATRIX(1023 downto 768), MATRIX(767 downto 512), MATRIX(511 downto 256));
-                when "0000000000000100"=>                               --Sub A, B, Armazena em C
-                    SUB(MATRIX(1023 downto 768), MATRIX(767 downto 512), MATRIX(511 downto 256));
-                when "0000000000000101"=>                               --Multiplicação C = A X B
-                    MUL(MATRIX(1023 downto 768), MATRIX(767 downto 512), MATRIX(511 downto 256));
-                    when "0000000000000111" =>  -- MAC: C = C + A x B
-                    MUL(MATRIX(1023 downto 768), MATRIX(767 downto 512), AUX);
-                    SOMA(MATRIX(511 downto 256), AUX, MAC_RESULT);                   
-                when "0000000000001000"=>                              --Identidade A, B e C igual a data respectivamente
-                    ID(MATRIX(1023 downto 768), data);                                         
-                when "0000000000001001"=>
-                    ID(MATRIX(767 downto 512), data);
-                when "0000000000001010"=>
-                    ID(MATRIX(511 downto 256), data);
-                        
-
-                when others =>        
-            end case;
-        end if;
-    end process;
+        process(MATRIX, AUX, oe_n, ce_n, we_n, clk, rst, data, address)
+        begin
+            if rising_edge(clk) then
+                case com(15 downto 0) is
+                    when "1111111111111111" =>
+                        if we_n = '0' then 
+                            WRITE(address(5 downto 0), data, MATRIX);
+                            report "Escrevendo em MATRIX" severity note;
+                        elsif oe_n = '0' then
+                            READ(address(5 downto 0), data, MATRIX);
+                            report "Lendo de MATRIX" severity note;
+                        end if;
+                    when "0000000000000011" => -- Soma A e B, armazena em C
+                        SOMA(MATRIX(1023 downto 768), MATRIX(767 downto 512), MATRIX(511 downto 256));
+                        report "Soma executada: A + B armazenado em C" severity note;
+                    when "0000000000000101" => -- Multiplicação
+                        MUL(MATRIX(1023 downto 768), MATRIX(767 downto 512), MATRIX(511 downto 256));
+                        report "Multiplicação executada: C = A * B" severity note;
+                    when "0000000000000111" => -- MAC
+                        MAC(MATRIX(1023 downto 768), MATRIX(767 downto 512), MATRIX(511 downto 256));
+                        report "MAC executado: C = C + A * B" severity note;
+                    when others =>
+                        report "Operação não reconhecida" severity warning;
+                end case;
+            end if;
+        end process;
+        
 
 end architecture reg;
 
