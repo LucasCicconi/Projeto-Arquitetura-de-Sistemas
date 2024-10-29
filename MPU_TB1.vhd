@@ -64,26 +64,61 @@ begin
         rst <= '0';  -- Desativando o reset
         wait for 20 ns;
 
-        -- Exemplo de escrita em matriz A
+        -- Teste 1: Escrever em A
         we_n <= '0'; -- Habilitando escrita
         address <= "0000000000000000"; -- Endereço para matriz A
         data <= "0000000000000001"; -- Dado a ser escrito
         wait for 20 ns;
 
-        -- Exemplo de leitura de matriz A
+        -- Teste 2: Ler de A
         we_n <= '1'; -- Desabilitando escrita
         oe_n <= '0'; -- Habilitando leitura
         wait for 20 ns;
 
-        -- Exemplo de execução de uma operação (por exemplo, soma)
-        address <= "0000000000000011"; -- Exemplo de opcode para soma
+        -- Teste 3: Operação de FILL em A
+        we_n <= '0'; 
+        address <= "0000000000000000"; 
+        data <= "0000000000000010"; -- Novo dado para preencher
         wait for 20 ns;
 
-        -- Exibir os resultados
-        wait for 50 ns;
-        -- Você pode adicionar mais estímulos aqui conforme necessário
+        -- Teste 4: Operação de soma
+        we_n <= '1'; 
+        oe_n <= '1'; -- Desabilitando leitura
+        address <= "0000000000000011"; -- Opcode para soma
+        wait for 20 ns;
+
+        -- Teste 5: Operação de SUB
+        address <= "0000000000000100"; -- Opcode para subtração
+        wait for 20 ns;
+
+        -- Teste 6: Operação de MUL
+        address <= "0000000000000101"; -- Opcode para multiplicação
+        wait for 20 ns;
+
+        -- Teste 7: Operação de MAC
+        address <= "0000000000000111"; -- Opcode para MAC
+        wait for 20 ns;
+
+        -- Teste 8: Identidade em A
+        we_n <= '0'; 
+        oe_n <= '1'; 
+        address <= "0000000000001000"; -- Opcode para identidade A
+        data <= "0000000000000003"; -- Dado a ser usado
+        wait for 20 ns;
+
+        -- Teste 9: Identidade em B
+        address <= "0000000000001001"; -- Opcode para identidade B
+        data <= "0000000000000004"; -- Outro dado
+        wait for 20 ns;
+
+        -- Teste 10: Identidade em C
+        address <= "0000000000001010"; -- Opcode para identidade C
+        data <= "0000000000000005"; -- Outro dado
+        wait for 20 ns;
 
         -- Finalizar simulação
+        wait for 50 ns;
         wait;
     end process;
+
 end architecture test;
