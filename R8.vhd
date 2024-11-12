@@ -1,30 +1,4 @@
--------------------------------------------------------------------------
---
---  R8 PROCESSOR   -  GOLD VERSION  -  02/MAY/2003
---
---  moraes - 30/09/2001  - project start
---  moraes - 22/11/2001  - instruction decoding bug correction
---  moraes - 22/03/2002  - store instruction correction            
---  moraes - 05/04/2003  - SIDLE state inclusion in the control unit
---  calazans - 02/05/2003  - translation of comments to English. Names of
---    some signals, entities, etc have been changed accordingly
---
---  Notes: 1) In this version, the register bank is designed using 
---    for-generate VHDL construction
---         2) The top-level processor entity is
---
---      entity processor is
---            port( ck,rst: in std_logic;
---                  dataIN:  in  reg16;     -- There is no bidirectional
---                  dataOUT: out reg16;	    -- port for the data bus.
---                  address: out reg16;	    -- This is not in accordance
---                  ce,rw: out std_logic );	-- to the specification
---      end processor;
--- 
--------------------------------------------------------------------------
 
---------------------------------------------------------------------------
--- package with basic types
 --------------------------------------------------------------------------
 library IEEE;
 use IEEE.Std_Logic_1164.all;
@@ -38,7 +12,7 @@ package R8 is
   -- the 15 conditional jumps are abstracted as just 3 instruction classes: jumpR, jump, jumpD
   type instruction is  
   ( add, sub, and_i, or_i, xor_i, addi, subi, ldl, ldh, ld, st, sl0, sl1, sr0, sr1,
-    notA, nop, halt, ldsp, rts, pop, push, jumpR, jump, jumpD, jsrr, jsr, jsrd, intr);
+    notA, nop, halt, ldsp, rts, pop, push, jumpR, jump, jumpD, jsrr, jsr, jsrd, intr, intr_rs1);
 
   
   type microinstruction is record
@@ -99,9 +73,6 @@ package body R8 is
   
 end R8;
 
---------------------------------------------------------------------------
--- General-purpose register -   SENSITIVE TO THE CLOCK FALLING EDGE
---------------------------------------------------------------------------
 library IEEE;
 use IEEE.Std_Logic_1164.all;
 use work.R8.all;
@@ -133,9 +104,6 @@ begin
 end register16;
 
 
---------------------------------------------------------------------------
--- Register BanK (R0..R15) - ALL 16 REGISTERS ARE USED
---------------------------------------------------------------------------
 library IEEE;
 use IEEE.Std_Logic_1164.all;
 use ieee.STD_LOGIC_UNSIGNED.all;   
@@ -168,11 +136,6 @@ begin
    
 end reg_bank;
 
---------------------------------------------------------------------------
---------------------------------------------------------------------------
---  Datapath structural description
---------------------------------------------------------------------------
---------------------------------------------------------------------------
 library IEEE;
 use IEEE.Std_Logic_1164.all;
 use IEEE.Std_Logic_unsigned.all;
@@ -189,13 +152,14 @@ entity datapath is
 end datapath;
 
 architecture datapath of datapath is
-
+	
     component reg_bank
           port( ck, rst, wreg, rs2: in std_logic;
                 ir, inREG:           in reg16;
                 source1, source2:    out reg16 );
     end component;
-
+		
+	 type type_state  is (Sidle, Sfetch);
     signal dtreg, dtpc, dtsp, s1, s2, outalu, pc, sp, ir, rA, rB, ralu, 
            opA, opB, addA, addB, add: reg16;
     signal cin, cout, overflow: std_logic;
@@ -204,7 +168,8 @@ architecture datapath of datapath is
 	 signal intr_in           : std_logic;                     -- Entrada para sinal de interrupção externa
     signal interrupt_enabled : std_logic := '0';              -- Flag para habilitar/desabilitar interrupções
     signal interrupt_address : reg16;                         -- Endereço de destino da interrupção
-    signal return_address    : reg16;    
+    signal return_address    : reg16;
+	 signal EA, PE :  type_state;
 
 begin
 
@@ -230,24 +195,29 @@ begin
   REG_alu:  register16 port map(ck=>ck, rst=>rst, ce=>uins.walu,  d=>outalu, q=>ralu );
   
   -- status flags
-  process (ck, rst)
-   begin
-     if rst = '1' then
-           flag <= (others => '0');
-     elsif ck'event and ck = '0' then
-         
-        if uins.wnz='1' then
-           flag(0) <= outalu(15);       -- negative flag 
-           flag(1) <= is_zero(outalu);  
+process (ck, rst)
+begin
+    if rst = '1' then
+        EA <= Sidle;
+    elsif rising_edge(ck) then
+        if intr_in = '1' and interrupt_enabled = '1' then
+            return_address <= pc;         -- Salva o PC atual para retorno
+            pc <= interrupt_address;      -- Salta para o endereço de interrupção
+            PE <= Sfetch;                 -- Volta para buscar a instrução de interrupção
+        else
+            if uins.wnz = '1' then
+                flag(0) <= outalu(15);    -- negative flag
+                flag(1) <= is_zero(outalu);
+            end if;
+
+            if uins.wcv = '1' then
+                flag(2) <= cout;
+                flag(3) <= overflow;
+            end if;
         end if;
-        
-        if uins.wcv='1' then
-           flag(2) <= cout;      
-           flag(3) <= overflow;   
-        end if; 
-             
-     end if;
-  end process;
+    end if;
+end process;
+
 
   --
   --  multiplexers
@@ -312,18 +282,13 @@ begin
     
 end datapath;
 
---------------------------------------------------------------------------
---------------------------------------------------------------------------
---  Control Unit behavioral description 
---------------------------------------------------------------------------
---------------------------------------------------------------------------
 library IEEE;
 use IEEE.Std_Logic_1164.all;
 use IEEE.Std_Logic_unsigned.all;
 use work.R8.all;
 entity control_unit is
       port (uins:    out microinstruction;
-            rst,ck: in std_logic;
+            rst,ck,intr_in: in std_logic;
             flag:   in reg4;
             ir:     in reg16 );
 end control_unit;
@@ -336,7 +301,9 @@ architecture control_unit of control_unit is
   signal EA, PE :  type_state;
 
   signal fn, fz, fc, fv, inst_la1, inst_la2:  std_logic;
-  signal i : instruction; 
+  signal i : instruction;
+  signal interrupt_enabled : std_logic := '0';  -- Default disabled
+  signal interrupt_address : reg16; 
 begin
    
    fn <= flag(0);          -- status flags
@@ -344,9 +311,6 @@ begin
    fc <= flag(2);
    fv <= flag(3);
    
-  ----------------------------------------------------------------------------------------
-  -- BLOCK (1/3) - INSTRUCTION DECODING
-  ----------------------------------------------------------------------------------------
   i <= add   when ir(15 downto 12)=0  else
        sub   when ir(15 downto 12)=1  else
        and_i when ir(15 downto 12)=2  else
@@ -370,6 +334,7 @@ begin
        pop   when ir(15 downto 12)=11 and ir(3 downto 0)=9  else
        push  when ir(15 downto 12)=11 and ir(3 downto 0)=10 else 
        intr  when ir(15 downto 12)=11 and ir(3 downto 0)= 11 else
+		 intr_rs1 when ir(15 downto 12) = 12 and ir(3 downto 0) = 11 else
                
        -- jump instructions ** It is here that the status flags are tested to jump or not to jump *************
 
@@ -402,9 +367,6 @@ begin
   inst_la2 <= '1' when i=addi or i=subi or i=ldl or i=ldh else
               '0'; 
               
-  ----------------------------------------------------------------------------------------
-  -- BLOCK (2/3) -  7 multiplexers control generation 
-  ----------------------------------------------------------------------------------------
 
   uins.mpc <= "10" when EA=Sfetch else
               "00" when EA=Srts  else
@@ -435,9 +397,6 @@ begin
              	-- in jumps and jsr instructions, the PC resgister is the ALU second operand
              "00" ;      
 
-  ---------------------------------------------------------------------------------------------
-  -- BLOCK (3/3) -  CONTROL FSM - generates the write enable and RAM access commands
-  --------------------------------------------------------------------------------------------- 
   
   uins.wpc  <= '1' when EA=Sfetch or EA=Sjmp  or EA=Ssbrt or EA=Srts               else '0';
   uins.wsp  <= '1' when EA=Sldsp  or EA=Srts   or EA=Ssbrt or EA=Spush or EA=Spop  else '0';
@@ -470,26 +429,33 @@ begin
 
     case EA is
                 
-         when Sidle => PE <=Sidle; -- reset being active, the processor do nothing!       
+         when Sidle => 
+				PE <=Sidle; -- reset being active, the processor do nothing!       
      --
      -- first clock cycle after reset and after each instruction ends execution
      --
-     when Sfetch => 
-							 -- Verifica se uma interrupção foi solicitada
-				if intr_in = '1' then
-	         PC <= interrupt_address;          -- Desvia para o endereço da interrupção
+ when Sfetch =>
+            -- First cycle after reset or end of instruction execution
+            if i = halt then
+                PE <= Shalt;
+            elsif i = intr_rs1 then
+                if ir(7 downto 4) /= "0000" then  -- Se Rs1 != 0
+                    interrupt_enabled <= '1';     -- Enable interrupts
+                    interrupt_address <= reg(CONV_INTEGER(ir(7 downto 4))); -- MEM[Rs1]
+                else
+                    interrupt_enabled <= '0';     -- Disable interrupts
+                end if;
+                PE <= Sfetch;
+            else
+                PE <= Srreg;  -- Proceed with regular instruction processing
+            end if;
 
-				return_address <= PC;             -- Salva o endereço atual para retorno
-				interrupt_enabled <= '0';         -- Desativa interrupções temporariamente
-				PE <= Sfetch;                     -- Volta para o estado de busca para buscar a instrução de interrupção
-	
+when halt =>
+    PE <= Shalt;
 
-							-- Se não houver interrupção, segue com a execução normal
-    elsif i = halt then
-        PE <= Shalt;                      
-    else
-        PE <= Srreg;                      
-    end if;
+when others =>
+    PE <= Srreg;
+
 
      --
      -- second clock cycle of every instruction
@@ -521,7 +487,7 @@ begin
      --
      -- fourth clock cycle of every instruction - GO BACK TO FETCH
      -- 
-     when Spop | Srts | Sldsp | Sld | Sst | Swbk | Sjmp | Ssbrt | Spush =>  PE <= Sfetch;
+     when Spop | Srts | Sldsp | Sint_r| Sld | Sst | Swbk | Sjmp | Ssbrt | Spush =>  PE <= Sfetch;
   
    end case;
 
@@ -529,9 +495,6 @@ begin
 
 end control_unit;
 
---------------------------------------------------------------------------
--- Top-level instantiation of the R8 Datapath and Control Unit
---------------------------------------------------------------------------
 library IEEE;
 use IEEE.Std_Logic_1164.all;
 use work.R8.all;
@@ -541,7 +504,6 @@ entity processor is
             dataIN:  in  reg16;
             dataOUT: out reg16;
             address: out reg16;
-            intr_in: in std_logic;
             ce,rw: out std_logic );
 end processor;
 
@@ -570,10 +532,10 @@ architecture processor of processor is
 
 begin
 
-    dp: datapath   port map(uins=>uins, ck=>ck, rst=>rst,instruction=>ir,
+    dp: datapath   port map(uins=>uins, ck=>ck, rst=>rst, intr_in => intr_in, instruction=>ir,
                             address=>address,dataIN=>dataIN, dataOUT=>dataOUT, flag=>flag);
 
-    ctrl: control_unit port map(uins=>uins, ck=>ck, rst=>rst, flag=>flag, ir=>ir, Rs1 => intr_in);
+    ctrl: control_unit port map(uins => uins, ck => ck, rst => rst, intr_in => intr_in, flag => flag, ir => ir);
 
     ce <= uins.ce;
     rw <= uins.rw;
