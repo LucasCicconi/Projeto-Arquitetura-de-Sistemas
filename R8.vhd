@@ -39,7 +39,7 @@ package R8 is
   type instruction is  
   ( add, sub, and_i, or_i, xor_i, addi, subi, ldl, ldh, ld, st, sl0, sl1, sr0, sr1,
     notA, nop, halt, ldsp, rts, pop, push, jumpR, jump, jumpD, jsrr, jsr, jsrd,
-    saveRAtoRC); -- Nova instrução
+    saveRAtoRC, intr); -- Novas instruções
 
   
   type microinstruction is record
@@ -317,7 +317,7 @@ end control_unit;
 architecture control_unit of control_unit is
 
   type type_state  is (Sidle, Sfetch, Srreg, Shalt, Salu,
-  Srts, Spop, Sldsp, Sld, Sst, Swbk, Sjmp, Ssbrt, Spush, Ssave);
+  Srts, Spop, Sldsp, Sld, Sst, Swbk, Sjmp, Ssbrt, Spush, Ssave,Sintr); -- novos estados 
   -- 13 states
   signal EA, PE :  type_state;
 
@@ -356,6 +356,7 @@ begin
        pop   when ir(15 downto 12)=11 and ir(3 downto 0)=9  else
        push  when ir(15 downto 12)=11 and ir(3 downto 0)=10 else
        saveRAtoRC when ir(15 downto 12)=11 and ir(3 downto 0)=11 else -- Exemplo de opcode
+		 intr when ir (15 downto 12)=12 and ir(3 downto 0)=12 else
   
  
                
@@ -396,7 +397,7 @@ begin
 
   uins.mpc <= "10" when EA=Sfetch else
               "00" when EA=Srts  else
-		  "11" when EA=Ssave else
+		        "11" when EA=Sintr else
               "01";                     -- alu mux
 
   uins.msp <= '1' when  i=jsrr or i=jsr or i=jsrd or i=push else  '0';
@@ -496,7 +497,7 @@ begin
      --
      -- fourth clock cycle of every instruction - GO BACK TO FETCH
      -- 
-     when Spop | Srts | Sldsp | Sld | Sst | Swbk | Sjmp | Ssbrt | Spush | Ssave =>  PE <= Sfetch;
+     when Spop | Srts | Sldsp | Sld | Sst | Swbk | Sjmp | Ssbrt | Spush | Ssave | Sintr =>  PE <= Sfetch;
   
    end case;
 
