@@ -321,7 +321,7 @@ architecture control_unit of control_unit is
   -- 13 states
   signal EA, PE :  type_state;
 
-  signal fn, fz, fc, fv, inst_la1, inst_la2:  std_logic;
+  signal fn, fz, fc, fv, inst_la1, inst_la2,intr_in:  std_logic;
   signal i : instruction; 
 begin
    
@@ -356,7 +356,7 @@ begin
        pop   when ir(15 downto 12)=11 and ir(3 downto 0)=9  else
        push  when ir(15 downto 12)=11 and ir(3 downto 0)=10 else
        saveRAtoRC when ir(15 downto 12)=11 and ir(3 downto 0)=11 else -- Exemplo de opcode
-		 intr when ir (15 downto 12)=12 and ir(3 downto 0)=12 else
+		 intr  when ir (15 downto 12)=12 and ir(3 downto 0)=12 else
   
  
                
@@ -464,7 +464,11 @@ begin
      --
      -- first clock cycle after reset and after each instruction ends execution
      --
-     when Sfetch =>  if i=halt then      -- found HALT => stop generating microinstructions
+     when Sfetch =>  if intr_in = '1' then      -- aadicionamos o estado de intr
+								 PE <= Sintr;
+								end if; 
+							
+							if i=halt then      -- found HALT => stop generating microinstructions
                          PE <= Shalt;
                      else
                          PE <= Srreg;
@@ -489,7 +493,8 @@ begin
                     elsif i=jumpR or i=jump or i=jumpD     then   PE <= Sjmp;
                     elsif i=jsrr or i=jsr or i=jsrd        then   PE <= Ssbrt;
                     elsif i=push                           then   PE <= Spush;
-                    elsif i=saveRAtoRC                     then   PE <= Ssave;  -- Adicionado estado para nova instrução
+                    elsif i=saveRAtoRC                     then   PE <= Ssave;  -- Adicionado estados para novas instruções
+						  elsif i=intr                           then   PE <= Sintr;  -- para o intr também
                     else  PE <= Sfetch;   -- nop and jumps with flag=0 execute in just 3 clock cycles ** ATTENTION **
                    end if;
      
