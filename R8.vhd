@@ -64,7 +64,7 @@ package R8 is
      mpu_start: std_logic;  -- Inicia operação na MPU
      mpu_done: std_logic;   -- Indica conclusão da operação pela MPU
      mpu_to_reg: std_logic; -- Escreve o resultado no registrador do R8
-	wrc: std_logic;  -- Sinal de escrita para o RC
+	  mpu_enable: std_logic;
 
   end record;
          
@@ -155,8 +155,8 @@ architecture reg_bank of reg_bank is
 begin            
      
     r1:for i in 0 to 15 generate   
-        rx: register16 PORT MAP(ck=>ck, rst=>rst, ce=>wen(i), d=>(mpu_data when mpu_to_reg = '1' else inREG), q=>reg(i));
-        wen(i) <= '1' when (ir(11 downto 8) = i and wreg = '1') or (ir(11 downto 8) = i and mpu_to_reg = '1') else '0';
+        rx: register16 PORT MAP(ck=>ck, rst=>rst, ce=>wen(i), d=>mpu_data , q=>reg(i)); --        d => (mpu_data when mpu_to_reg = '1' else inREG), erro aqui
+    wen(i) <= '1' when ((ir(11 downto 8) = i) and (wreg = '1')) or ((ir(11 downto 8) = i) and (mpu_to_reg = '1')) else '0';
   
     end generate r1;       
   
@@ -187,7 +187,7 @@ entity datapath is
             dataOUT: out reg16;
             flag: out reg4;
             mpu_data_out, mpu_data_in_a, mpu_data_in_b: inout reg16;
-            start_mul, mpu_done: in std_logic );
+            start_mul, mpu_done: inout std_logic );
 end datapath;
 
 architecture datapath of datapath is
@@ -199,8 +199,8 @@ architecture datapath of datapath is
     end component;
 
     signal dtreg, dtpc, dtsp, s1, s2, outalu, pc, sp, ir, rA, rB, rC, ralu, 
-           opA, opB, addA, addB, add, mpu_data_out, mpu_data_in_a, mpu_data_in_b: reg16;
-    signal cin, cout, overflow, start_mul, mpu_done: std_logic;
+           opA, opB, addA, addB, add: reg16;
+    signal cin, cout, overflow: std_logic;
 begin
 
   --  IR register to instruction output signal
@@ -222,7 +222,7 @@ begin
 
   REG_B:    register16 port map(ck=>ck, rst=>rst, ce=>uins.wab,   d=>s2,     q=>rB );
 
-  REG_RC:   register16 port map(ck=>ck, rst=>rst, ce=>uins.wreg, d=>rA, q=>rC); -- adicionando o registrador RC
+  --REG_RC:   register16 port map(ck=>ck, rst=>rst, ce=>uins.wreg, d=>rA, q=>rC); -- adicionando o registrador RC erro aqui
 
   REG_alu:  register16 port map(ck=>ck, rst=>rst, ce=>uins.walu,  d=>outalu, q=>ralu );
   
@@ -331,7 +331,7 @@ use IEEE.Std_Logic_1164.all;
 use IEEE.Std_Logic_unsigned.all;
 use work.R8.all;
 entity control_unit is
-      port (uins:    out microinstruction;
+      port (uins:    out  microinstruction;
             rst,ck: in std_logic;
             flag:   in reg4;
             ir:     in reg16 );
@@ -340,7 +340,7 @@ end control_unit;
 architecture control_unit of control_unit is
 
   type type_state  is (Sidle, Sfetch, Srreg, Shalt, Salu,
-  Srts, Spop, Sldsp, Sld, Sst, Swbk, Sjmp, Ssbrt, Spush, Ssave,Sintr,  Smulm); -- novos estados 
+  Srts, Spop, Sldsp, Sld, Sst, Swbk, Sjmp, Ssbrt, Spush, Ssave,Sintr,  Smul, Smpu_start, Smpu_wait, Smpu_to_reg); -- novos estados 
   -- 13 states
   signal EA, PE :  type_state;
 
@@ -379,7 +379,7 @@ begin
        pop   when ir(15 downto 12)=11 and ir(3 downto 0)=9  else
        push  when ir(15 downto 12)=11 and ir(3 downto 0)=10 else
        saveRAtoRC when ir(15 downto 12)=11 and ir(3 downto 0)=11 else -- Exemplo de opcode
-	 intr  when ir (15 downto 12)=12 and ir(3 downto 0)=12 else
+	    intr  when ir (15 downto 12)=12 and ir(3 downto 0)=12 else
        mulm  when ir(15 downto 12)=13 and ir(3 downto 0)=13 else -- Adicionado mulm
 
   
@@ -435,7 +435,7 @@ begin
               "00";                                 -- default used is for LD/ST instructions
 
   -- in which register to write contents just arrived from memory, if any
-  uins.mreg <= '1' when i=ld or i=pop else '0' or i=mulm; --Para armazenar o resultado da multiplicação da matriz em um registrador ou endereço específico:
+  uins.mreg <= '1' when i=ld or i=pop or i=mulm else '0' ; --Para armazenar o resultado da multiplicação da matriz em um registrador ou endereço específico:
        
   -- the second source operand (source2) receives the destination register address
   -- when the instruction in question is an arithmetic/logic type 2, a push or memory write,
@@ -465,7 +465,6 @@ begin
   uins.wcv  <= '1' when EA=Salu and (i=add or i=addi or i=sub or i=subi)           else '0';
 
   uins.mpu_enable <= '1' when EA = Smul else '0';
-
   
       ---  IMPORTANT !!!!!!!!!!!!!
   uins.ce<='1' when rst='0' and (EA=Sfetch or EA=Srts or EA=Spop or EA=Sld or EA=Ssbrt or EA=Spush or EA=Sst) else '0';
@@ -542,11 +541,11 @@ begin
           
           -- New state to wait for MPU operation to finish
           when Smpu_wait => 
-              if uins.mpu_done = '1' then   -- Check if MPU has finished the operation
-                  PE <= Smpu_to_reg;       -- Transfer result to register
-              else
-                  PE <= Smpu_wait;         -- Stay in the wait state if not done
-              end if;
+              --if uins.mpu_done = '1' then   -- Check if MPU has finished the operation erro aqui
+                  PE <= Smpu_to_reg;       -- Transfer result to register erro aqui
+              --else
+                  --PE <= Smpu_wait;         -- Stay in the wait state if not done
+              --end if; erro acaba aqui erro aqui
   
           -- New state to write the result from MPU to register
           when Smpu_to_reg => 
