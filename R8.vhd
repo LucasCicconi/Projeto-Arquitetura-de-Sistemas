@@ -39,7 +39,7 @@ package R8 is
   type instruction is  
   ( add, sub, and_i, or_i, xor_i, addi, subi, ldl, ldh, ld, st, sl0, sl1, sr0, sr1,
     notA, nop, halt, ldsp, rts, pop, push, jumpR, jump, jumpD, jsrr, jsr, jsrd,
-    saveRAtoRC, intr); -- Novas instruções
+    saveRAtoRC, intr, mulm); -- Novas instruções
 
   
   type microinstruction is record
@@ -60,7 +60,11 @@ package R8 is
      wcv:   std_logic;                     -- C and V flags write enable
      ce,rw: std_logic;                     -- Chip enable and R_W controls
      alu:   instruction;                   -- ALU operation specification
-	  wrc: std_logic;  -- Sinal de escrita para o RC
+     wrc: std_logic;  -- Sinal de escrita para o RC
+     mpu_start: std_logic;  -- Inicia operação na MPU
+     mpu_done: std_logic;   -- Indica conclusão da operação pela MPU
+     mpu_to_reg: std_logic; -- Escreve o resultado no registrador do R8
+	wrc: std_logic;  -- Sinal de escrita para o RC
 
   end record;
          
@@ -137,8 +141,11 @@ use work.R8.all;
 entity reg_bank is
       port(  ck, rst, wreg, rs2: in   std_logic;
              ir, inREG:          in   reg16;
+             mpu_data:           in   reg16;    -- Dado da MPU
+             mpu_to_reg:         in   std_logic;-- Controle de escrita MPU
              source1, source2:   out  reg16     );
 end entity;
+
 
 architecture reg_bank of reg_bank is   
    type bank is array (0 to 15) of reg16;
@@ -148,8 +155,9 @@ architecture reg_bank of reg_bank is
 begin            
      
     r1:for i in 0 to 15 generate   
-        wen(i) <= '1' when  ir(11 downto 8)=i  and wreg='1'  else '0';
-        rx: register16 PORT MAP(ck=>ck, rst=>rst, ce=>wen(i), d=>inREG, q=>reg(i));               
+        rx: register16 PORT MAP(ck=>ck, rst=>rst, ce=>wen(i), d=>(mpu_data when mpu_to_reg = '1' else inREG), q=>reg(i));
+        wen(i) <= '1' when (ir(11 downto 8) = i and wreg = '1') or (ir(11 downto 8) = i and mpu_to_reg = '1') else '0';
+  
     end generate r1;       
   
     -- source1 selection 
@@ -177,7 +185,9 @@ entity datapath is
             instruction, address : out reg16;
             dataIN:  in  reg16;
             dataOUT: out reg16;
-            flag: out reg4 );
+            flag: out reg4;
+            mpu_data_out, mpu_data_in_a, mpu_data_in_b: inout reg16;
+            start_mul, mpu_done: in std_logic );
 end datapath;
 
 architecture datapath of datapath is
@@ -189,8 +199,8 @@ architecture datapath of datapath is
     end component;
 
     signal dtreg, dtpc, dtsp, s1, s2, outalu, pc, sp, ir, rA, rB, rC, ralu, 
-           opA, opB, addA, addB, add: reg16;
-    signal cin, cout, overflow: std_logic;
+           opA, opB, addA, addB, add, mpu_data_out, mpu_data_in_a, mpu_data_in_b: reg16;
+    signal cin, cout, overflow, start_mul, mpu_done: std_logic;
 begin
 
   --  IR register to instruction output signal
@@ -221,6 +231,8 @@ begin
    begin
      if rst = '1' then
            flag <= (others => '0');
+           rC <= (others => '0');
+
      elsif ck'event and ck = '0' then
          
         if uins.wnz='1' then
@@ -232,6 +244,10 @@ begin
            flag(2) <= cout;      
            flag(3) <= overflow;   
         end if; 
+
+        if mpu_done = '1' then
+            rC <= mpu_data_out; -- Armazena o resultado da multiplicação
+        end if;
              
      end if;
   end process;
@@ -280,6 +296,11 @@ begin
   cin <= '1' when uins.alu=sub or uins.alu=subi else '0';
   
   addAB( addA, addB, cin, add, cout, overflow); 
+
+  mpu_data_in_a <= rA; -- Endereço da matriz A
+  mpu_data_in_b <= rB; -- Endereço da matriz B
+  start_mul <= '1' when uins.alu = mulm else '0'; -- Inicia a operação
+
   
   outalu <= opA and opB                        when uins.alu = and_i else  
             opA or  opB                        when uins.alu = or_i  else   
@@ -294,6 +315,8 @@ begin
              opB + 1                           when uins.alu = rts or uins.alu=pop else  
              RA                                when uins.alu = jump or uins.alu=jsr  or uins.alu=ldsp or uins.alu = saveRAtoRC else      
              add;     -- by default the ALU operation is add!!
+
+
   
     
 end datapath;
@@ -317,7 +340,7 @@ end control_unit;
 architecture control_unit of control_unit is
 
   type type_state  is (Sidle, Sfetch, Srreg, Shalt, Salu,
-  Srts, Spop, Sldsp, Sld, Sst, Swbk, Sjmp, Ssbrt, Spush, Ssave,Sintr); -- novos estados 
+  Srts, Spop, Sldsp, Sld, Sst, Swbk, Sjmp, Ssbrt, Spush, Ssave,Sintr,  Smulm); -- novos estados 
   -- 13 states
   signal EA, PE :  type_state;
 
@@ -356,7 +379,9 @@ begin
        pop   when ir(15 downto 12)=11 and ir(3 downto 0)=9  else
        push  when ir(15 downto 12)=11 and ir(3 downto 0)=10 else
        saveRAtoRC when ir(15 downto 12)=11 and ir(3 downto 0)=11 else -- Exemplo de opcode
-		 intr  when ir (15 downto 12)=12 and ir(3 downto 0)=12 else
+	 intr  when ir (15 downto 12)=12 and ir(3 downto 0)=12 else
+       mulm  when ir(15 downto 12)=13 and ir(3 downto 0)=13 else -- Adicionado mulm
+
   
  
                
@@ -379,7 +404,7 @@ begin
        jsr   when ir(15 downto 12)=12 and ir(3 downto 0)=11 else
        jsrd  when ir(15 downto 12)=15 else
        
-       nop ;  -- IMPORTANT: default condition in case flag values are '1';
+       nop ;  -- IMPORTANT: default condition in case flag values are '1';t
         
   uins.alu <= i;       -- operation that the alu is about to execute
 
@@ -405,11 +430,12 @@ begin
               
 
   uins.mad <= "10" when EA=Spush or  EA=Ssbrt else  -- in a subroutine mem is addressed by SP
-              "01" when EA=Sfetch else              -- in an instruction fetch mem is addressed by the PC
+              "01" when EA=Sfetch else
+              "11" when i=mulm else               -- para a MPU acessar as matrizes
               "00";                                 -- default used is for LD/ST instructions
 
   -- in which register to write contents just arrived from memory, if any
-  uins.mreg <= '1' when i=ld or i=pop else '0';
+  uins.mreg <= '1' when i=ld or i=pop else '0' or i=mulm; --Para armazenar o resultado da multiplicação da matriz em um registrador ou endereço específico:
        
   -- the second source operand (source2) receives the destination register address
   -- when the instruction in question is an arithmetic/logic type 2, a push or memory write,
@@ -422,7 +448,7 @@ begin
 
   uins.mb <= "01"  when  i=rts or i=pop   else      -- to increment the SP register
              "10"  when  i=jumpR or i=jump or i=jumpD or i=jsrr or i=jsr or i=jsrd  else 
-             	-- in jumps and jsr instructions, the PC resgister is the ALU second operand
+             "11"  when i=mulm else	-- in jumps and jsr instructions, the PC resgister is the ALU second operand
              "00" ;      
 
   ---------------------------------------------------------------------------------------------
@@ -434,13 +460,16 @@ begin
   uins.wir  <= '1' when EA=Sfetch                                                  else '0';
   uins.wab  <= '1' when EA=Srreg                                                   else '0';
   uins.walu <= '1' when EA=Salu                                                    else '0';
-  uins.wreg <= '1' when EA=Swbk  or EA=Sld  or EA=Spop  or  EA=Ssave                        else '0';
+  uins.wreg <= '1' when EA=Swbk  or EA=Sld  or EA=Spop  or  EA=Ssave   or  EA = Smul                     else '0';
   uins.wnz  <= '1' when EA=Salu and (inst_la1='1' or  i=addi or i=subi)            else '0';
   uins.wcv  <= '1' when EA=Salu and (i=add or i=addi or i=sub or i=subi)           else '0';
+
+  uins.mpu_enable <= '1' when EA = Smul else '0';
+
   
       ---  IMPORTANT !!!!!!!!!!!!!
   uins.ce<='1' when rst='0' and (EA=Sfetch or EA=Srts or EA=Spop or EA=Sld or EA=Ssbrt or EA=Spush or EA=Sst) else '0';
-  uins.rw<='1' when EA=Sfetch or EA=Srts or EA=Spop or EA=Sld else '0';
+  uins.rw<='1' when EA=Sfetch or EA=Srts or EA=Spop or EA=Sld or EA = Smul else '0';
   
   process(rst, ck)
    begin
@@ -460,7 +489,7 @@ begin
 
     case EA is
                 
-         when Sidle => PE <=Sidle; -- reset being active, the processor do nothing!       
+         when Sidle => PE <=Sidle; -- reset being active, the processor does nothing!       
      --
      -- first clock cycle after reset and after each instruction ends execution
      --
@@ -495,14 +524,36 @@ begin
                     elsif i=push                           then   PE <= Spush;
                     elsif i=saveRAtoRC                     then   PE <= Ssave;  -- Adicionado estados para novas instruções
 						  elsif i=intr                           then   PE <= Sintr;  -- para o intr também
+
+
                     else  PE <= Sfetch;   -- nop and jumps with flag=0 execute in just 3 clock cycles ** ATTENTION **
                    end if;
      
 	
+
      --
      -- fourth clock cycle of every instruction - GO BACK TO FETCH
      -- 
-     when Spop | Srts | Sldsp | Sld | Sst | Swbk | Sjmp | Ssbrt | Spush | Ssave | Sintr =>  PE <= Sfetch;
+              -- New state to handle MPU start
+              when Smpu_start => 
+              -- Set the control signal to start the MPU operation
+              uins.mpu_start <= '1';   -- Activate MPU operation
+              PE <= Smpu_wait;         -- Wait for MPU completion
+          
+          -- New state to wait for MPU operation to finish
+          when Smpu_wait => 
+              if uins.mpu_done = '1' then   -- Check if MPU has finished the operation
+                  PE <= Smpu_to_reg;       -- Transfer result to register
+              else
+                  PE <= Smpu_wait;         -- Stay in the wait state if not done
+              end if;
+  
+          -- New state to write the result from MPU to register
+          when Smpu_to_reg => 
+              uins.mpu_to_reg <= '1';    -- Enable writing the result to the register
+              PE <= Sfetch;              -- Return to fetch state
+  
+     when Spop | Srts | Sldsp | Sld | Sst | Swbk | Sjmp | Ssbrt | Spush | Ssave | Sintr | Smul =>  PE <= Sfetch;
   
    end case;
 
